@@ -1,0 +1,189 @@
+name: UnitMesh - UnitServer Demo
+category: Development
+author: Phodal Huang
+description: REPL Service for ClickFlow
+explain: |
+  digraph G {
+    0[flowType = "prompt"]
+    1[flowType = "prompt"]
+    2[flowType = "prompt"]
+    3[flowType = "prompt"]
+
+    0 -> 1
+    1 -> 2
+    1 -> 3
+  }
+
+stepGuide: false
+replService: true
+steps:
+  - name: Setup REPL
+    hiddenExecute: true
+    ask: |
+      首先，你需要 Setup 一下 FlowRepl: [https://github.com/prompt-engineering/unit-server](https://github.com/prompt-engineering/unit-server)
+
+      然后，启动对应的 REPL 服务，例如:
+
+      - Kotlin Repl
+      - TypeScript Repl
+
+      然后，Run 一下下面的代码：
+
+      ```kotlin
+      var x = 1
+      x + 10086
+      ```
+
+      如果返回的是 `{"resultValue":"10087","className":"java.lang.Integer"}` 那就说明你的 REPL 服务已经可以正常工作了。
+  - name: Generate Code
+    markdownEditor: true
+    ask: |
+      请帮我使用 Ktor + Kotlin + Exposed 实现一个用户注册的 RESTful API，要求如下：
+
+      1. 涉及到数据库的地方，请直接使用 Database.connect。
+      2. 只返回核心逻辑，并写在 Server 类里，我要部署在 Serverless 服务器里。
+      3. 请使用 Kotlin DSL 的方式编写代码。
+      4. 不返回其它的无关代码，如：注释、依赖、import 等。
+
+      最后，你只返回类的代码，返回格式如下：
+
+      ```kotlin
+      class Server : KotlessAWS() {
+          override fun prepare(app: Application) {
+              Database.connect("jdbc:h2:mem:test", driver = "org.h2.Driver", user = "root", password = "")
+              transaction {
+                  SchemaUtils.create(Users)
+              }
+
+              app.routing {
+                  {{{}}}
+              }
+          }
+      }
+      ```
+
+      请格式返回。
+  - name: Kotlin Ktor Sample
+    hiddenExecute: true
+    ask: |
+      下面的代码是 AI 生成的，不过好像有点问题：
+
+      ```kotlin
+      @file:Repository("https://packages.jetbrains.team/maven/p/ktls/maven")
+      @file:Repository("https://repo.maven.apache.org/maven2/")
+
+      @file:DependsOn("io.kotless:kotless-lang:0.2.0")
+      @file:DependsOn("io.kotless:kotless-lang-local:0.2.0")
+      @file:DependsOn("io.kotless:ktor-lang:0.2.0")
+      @file:DependsOn("io.kotless:ktor-lang-local:0.2.0")
+
+      @file:DependsOn("com.h2database:h2:2.1.212")
+
+      @file:DependsOn("org.jetbrains.exposed:exposed-core:0.40.1")
+      @file:DependsOn("org.jetbrains.exposed:exposed-dao:0.40.1")
+      @file:DependsOn("org.jetbrains.exposed:exposed-jdbc:0.40.1")
+
+      import io.kotless.dsl.ktor.KotlessAWS
+      import kotlin.reflect.full.primaryConstructor
+
+      import io.ktor.application.*
+      import io.ktor.request.*
+      import io.ktor.response.*
+      import io.ktor.routing.*
+      import io.ktor.server.engine.*
+      import io.ktor.server.netty.*
+      import org.jetbrains.exposed.sql.Database
+      import org.jetbrains.exposed.sql.SchemaUtils
+      import org.jetbrains.exposed.sql.insert
+      import org.jetbrains.exposed.sql.transactions.transaction
+
+      data class User(val id: Int, val username: String)
+
+      class Server : KotlessAWS() {
+          override fun prepare(app: Application) {
+              Database.connect("jdbc:h2:mem:test", driver = "org.h2.Driver")
+
+              transaction {
+                  SchemaUtils.create(Users)
+              }
+
+              app.routing {
+                  post("/register") {
+                      val user = call.receive<User>()
+                      val id = transaction {
+                          // Insert the new user into the database
+                          Users.insert {
+                              it[username] = user.username
+                          } get Users.id
+                      }
+
+                      val newUser = User(id, user.username)
+                      call.respond(newUser)
+                  }
+              }
+          }
+      }
+
+      object Users : org.jetbrains.exposed.sql.Table("users") {
+          val id = integer("id").autoIncrement()
+          val username = varchar("username", 50).uniqueIndex()
+
+          override val primaryKey = PrimaryKey(id, name = "PK_User_ID")
+      }
+
+      fun main(port: Int) {
+          val classToStart = Server::class.java.name
+
+          val ktClass = ::main::class.java.classLoader.loadClass(classToStart).kotlin
+          val instance = (ktClass.primaryConstructor?.call() ?: ktClass.objectInstance) as? KotlessAWS
+
+          val kotless =
+              instance ?: error("The entry point $classToStart does not inherit from ${KotlessAWS::class.qualifiedName}!")
+
+          embeddedServer(Netty, port) {
+              kotless.prepare(this)
+          }.start(wait = true)
+      }
+
+      main(8848)
+      ```
+
+  - name: Kotlin Spring Sample
+    hiddenExecute: true
+    ask: |
+      ```kotlin
+      // SLf4j 1.7 can accidentially be pulled in using Spring Boot 3 leading to exceptions
+      // https://github.com/spring-projects/spring-boot/issues/33854
+      @file:DependsOn("org.springframework.boot:spring-boot-starter-web:2.7.9")
+      // logging.level.org.springframework.boot.autoconfigure=INFO
+      //@file:CompilerOptions("-jvm-target", "1.8", "-Xabi-stability=unstable")
+      //@file:DependsOn("ch.qos.logback:logback-classic:1.3.4", options = ["transitive=false"])
+      //@file:DependsOn("org.apache.logging.log4j:log4j-slf4j-impl:2.20.0")
+      package sample
+
+      import org.springframework.boot.*
+      import org.springframework.boot.autoconfigure.*
+      import org.springframework.context.annotation.ComponentScan
+      import org.springframework.context.annotation.Configuration
+      import org.springframework.web.bind.annotation.*
+      import java.util.*
+
+      @RestController
+      class SampleController {
+        @GetMapping("/hello")
+        fun helloKotlin(): String {
+          return "hello world"
+        }
+      }
+
+      @Configuration
+      @ComponentScan(basePackageClasses = [SampleController::class])
+      @SpringBootApplication
+      open class ReplApplication
+
+      fun main(args: Array<String>) {
+        SpringApplication(ReplApplication::class.java).run(*args)
+      }
+
+      main(arrayOf("--server.port=8083"))
+      ```
